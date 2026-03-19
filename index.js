@@ -40,13 +40,20 @@ async function simulateIncomingLeads() {
     else if (r < 0.30) canal = 'Varejo';
     else if (r < 0.65) canal = 'Elegíveis Portfel';
 
+    let patrimonioVal = '';
+    const randPat = Math.random();
+    // 5% chance of 5MM to 20MM, 10% chance of 1MM to 4MM, 85% chance of 50k to 950k
+    if (randPat < 0.05) patrimonioVal = 'R$ ' + (Math.floor(Math.random() * 15) + 5) + 'MM'; 
+    else if (randPat < 0.15) patrimonioVal = 'R$ ' + (Math.floor(Math.random() * 4) + 1) + 'MM'; 
+    else patrimonioVal = 'R$ ' + (Math.floor(Math.random() * 900) + 50) + 'k'; 
+
     leadsToInsert.push({
       nome: `Lead C-${Math.floor(Math.random() * 99999)}`,
       canal: canal,
       pmp: randomPmp,
       leadsource: randomSource,
       renda: 'R$ ' + (Math.floor(Math.random() * 10) + 5) + 'k',
-      patrimonio: 'R$ ' + (Math.floor(Math.random() * 100) + 50) + 'k',
+      patrimonio: patrimonioVal,
       telefone: generatePhone()
     });
   }
@@ -72,11 +79,7 @@ function stopSimulation() {
   }
 }
 
-// Leave it off initially until user clicks the play button to prevent DB flood.
-// startSimulation();
-
 app.get('/api/leads/summary', async (req, res) => {
-  // Query Supabase for real data aggregation
   const { data, error } = await supabase.from('leads').select('leadsource, pmp, canal');
   if (error) {
     console.error(error);
@@ -84,18 +87,10 @@ app.get('/api/leads/summary', async (req, res) => {
   }
 
   const summary = {};
-  
   sources.forEach(s => {
     summary[s] = {};
     pmps.forEach(p => {
-      summary[s][p] = {
-        name: p,
-        total: 0,
-        ja_existiam: 0,
-        varejo: 0,
-        elegiveis_portfel: 0,
-        elegiveis_g: 0
-      };
+      summary[s][p] = { name: p, total: 0, ja_existiam: 0, varejo: 0, elegiveis_portfel: 0, elegiveis_g: 0 };
     });
   });
 
@@ -107,7 +102,6 @@ app.get('/api/leads/summary', async (req, res) => {
       
       if(summary[s] && summary[s][p]) {
         summary[s][p].total += 1;
-        // The dashboard expects drops as negative
         if(c === 'Já existiam') summary[s][p].ja_existiam -= 1;
         else if(c === 'Varejo') summary[s][p].varejo -= 1;
         else if(c === 'Elegíveis Portfel') summary[s][p].elegiveis_portfel += 1;
@@ -116,15 +110,23 @@ app.get('/api/leads/summary', async (req, res) => {
     });
   }
 
-  // Convert map to array the frontend reads
-  const result = sources.map(s => {
-    return {
-      leadsource: s,
-      items: pmps.map(p => summary[s][p])
-    }
-  });
+  const result = sources.map(s => ({
+    leadsource: s,
+    items: pmps.map(p => summary[s][p])
+  }));
 
   res.json(result);
+});
+
+// NEW ENDPOINT: Fetch 10 most recent leads for the Breaking News feed
+app.get('/api/leads/latest', async (req, res) => {
+  const { data, error } = await supabase
+    .from('leads')
+    .select('nome, canal, pmp, leadsource, patrimonio, created_at')
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
 });
 
 app.get('/api/simulation/status', (req, res) => {
@@ -132,15 +134,11 @@ app.get('/api/simulation/status', (req, res) => {
 });
 
 app.post('/api/simulation/toggle', (req, res) => {
-  if (isRunning) {
-    stopSimulation();
-  } else {
-    startSimulation();
-  }
+  if (isRunning) stopSimulation();
+  else startSimulation();
   res.json({ isRunning });
 });
 
-// Protect against uncaught exceptions crashing the Railway container
 process.on('uncaughtException', err => console.error('Uncaught Exception:', err));
 process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
 
