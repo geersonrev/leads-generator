@@ -26,29 +26,30 @@ function generatePhone() {
 async function simulateIncomingLeads() {
   const leadsToInsert = [];
   
-  sources.forEach(source => {
-    pmps.forEach(pmp => {
-      // Small amount of leads every 5s ticks to prevent exploding the DB at once
-      const newTotal = Math.floor(Math.random() * 4); 
-      for(let i=0; i<newTotal; i++) {
-        const r = Math.random();
-        let canal = 'Elegíveis G'; // mapping the funnel classes to 'canal' loosely to match DB layout
-        if (r < 0.15) canal = 'Já existiam';
-        else if (r < 0.30) canal = 'Varejo';
-        else if (r < 0.65) canal = 'Elegíveis Portfel';
+  // Reduce generation flow drastically: only 1 to 3 leads *total* per tick (every 5s)
+  const numLeadsThisTick = Math.floor(Math.random() * 3) + 1; 
+  
+  for(let i=0; i<numLeadsThisTick; i++) {
+    // Pick a completely random source and pmp for this tiny batch
+    const randomSource = sources[Math.floor(Math.random() * sources.length)];
+    const randomPmp = pmps[Math.floor(Math.random() * pmps.length)];
+    
+    const r = Math.random();
+    let canal = 'Elegíveis G'; 
+    if (r < 0.15) canal = 'Já existiam';
+    else if (r < 0.30) canal = 'Varejo';
+    else if (r < 0.65) canal = 'Elegíveis Portfel';
 
-        leadsToInsert.push({
-          nome: `Lead C-${Math.floor(Math.random() * 99999)}`,
-          canal: canal,
-          pmp: pmp,
-          leadsource: source,
-          renda: 'R$ ' + (Math.floor(Math.random() * 10) + 5) + 'k',
-          patrimonio: 'R$ ' + (Math.floor(Math.random() * 100) + 50) + 'k',
-          telefone: generatePhone()
-        });
-      }
+    leadsToInsert.push({
+      nome: `Lead C-${Math.floor(Math.random() * 99999)}`,
+      canal: canal,
+      pmp: randomPmp,
+      leadsource: randomSource,
+      renda: 'R$ ' + (Math.floor(Math.random() * 10) + 5) + 'k',
+      patrimonio: 'R$ ' + (Math.floor(Math.random() * 100) + 50) + 'k',
+      telefone: generatePhone()
     });
-  });
+  }
 
   if (leadsToInsert.length > 0) {
     const { error } = await supabase.from('leads').insert(leadsToInsert);
